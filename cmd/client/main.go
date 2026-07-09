@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"os/signal"
 
@@ -16,17 +17,17 @@ func main() {
 	url := "amqp://guest:guest@localhost:5672/"
 	connection, err := amqp.Dial(url)
 	if err != nil {
-		fmt.Printf("error while creating a connection: %v\n", err)
+		log.Fatalf("error while creating a connection to RabbitMQ: %v\n", err)
 	}
-	fmt.Println("connection was successfully established")
+	fmt.Println("connection to RabbitMQ was successfully established")
 	defer connection.Close()
 
 	username, err := gamelogic.ClientWelcome()
 	if err != nil {
-		fmt.Printf("error while prompting for a username: %v\n", err)
+		log.Fatalf("error while prompting for a username: %v\n", err)
 	}
 
-	_, _, err = pubsub.DeclareAndBind(
+	_, queue, err := pubsub.DeclareAndBind(
 		connection,
 		routing.ExchangePerilDirect,
 		routing.PauseKey + "." + username,
@@ -34,8 +35,9 @@ func main() {
 		pubsub.Transient,
 	)
 	if err != nil {
-		fmt.Println(err)	
+		log.Fatalf("could not subscribe to pause: %v", err)	
 	}
+	fmt.Printf("Queue %v declared and bound!\n", queue.Name)
 
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, os.Interrupt)
