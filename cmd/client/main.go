@@ -27,20 +27,53 @@ func main() {
 		log.Fatalf("error while prompting for a username: %v\n", err)
 	}
 
-	_, queue, err := pubsub.DeclareAndBind(
+	gameState := gamelogic.NewGameState(username)
+
+	err = pubsub.SubscribeJSON(
 		connection,
 		routing.ExchangePerilDirect,
 		routing.PauseKey + "." + username,
 		routing.PauseKey,
 		pubsub.Transient,
+		handlerPause(gameState),
 	)
 	if err != nil {
-		log.Fatalf("could not subscribe to pause: %v", err)	
+		log.Fatalf("could not subscribe to change game state: %v\n", err)	
 	}
-	fmt.Printf("Queue %v declared and bound!\n", queue.Name)
+
+	OuterLoop:
+	for {
+		input := gamelogic.GetInput()
+		switch input[0] {
+		case "spawn":
+			gameState.CommandSpawn(input)
+		case "move":
+			_, err = gameState.CommandMove(input)
+			if err != nil {
+				fmt.Println(err)
+			}
+		case "status":
+			gameState.CommandStatus()
+		case "help":
+			gamelogic.PrintClientHelp()
+		case "spam":
+			fmt.Println("Spamming not allowed yet!")
+		case "quit":
+			break OuterLoop
+		default:
+			fmt.Println("unknown command")
+		}
+	}
 
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, os.Interrupt)
 	<-signalChan
 	fmt.Println("gracefully shutting down")
+}
+
+func handlerPause(gs *gamelogic.GameState) func(routing.PlayingState) {
+	return func(ps routing.PlayingState) {
+		defer fmt.Print("> ")
+		gs.HandlePause(ps)
+	}
 }
