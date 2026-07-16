@@ -65,13 +65,18 @@ func main() {
 			move, err := gameState.CommandMove(input)
 			if err != nil {
 				fmt.Println(err)
+				continue
 			}
-			pubsub.PublishJSON(
+			err = pubsub.PublishJSON(
 				ch,
 				routing.ExchangePerilTopic,
 				routing.ArmyMovesPrefix + "." + username,
 				move,
 			)
+			if err != nil {
+				fmt.Printf("error: %s\n", err)
+				continue
+			}
 		case "status":
 			gameState.CommandStatus()
 		case "help":

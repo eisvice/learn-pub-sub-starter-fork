@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/bootdotdev/learn-pub-sub-starter/internal/routing"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
@@ -65,7 +66,9 @@ func DeclareAndBind(
 		queueType == Transient, // autoDelete
 		queueType == Transient, // exclusive
 		false, // noWait
-		nil, // args
+		amqp.Table{
+			"x-dead-letter-exchange": routing.ExchangePerilDeadLetter,
+		}, // args
 	)
 	if err != nil {
 		return nil, amqp.Queue{}, fmt.Errorf("error while declaring a queue: %v", err)
