@@ -40,8 +40,11 @@ func main() {
 		routing.ArmyMovesPrefix + "." + username,
 		routing.ArmyMovesPrefix + ".*",
 		pubsub.Transient,
-		handlerMove(gameState),
+		handlerMove(gameState, ch),
 	)
+	if err != nil {
+		log.Fatalf("could not subscribe to move handler: %v\n", err)	
+	}
 
 	err = pubsub.SubscribeJSON(
 		connection,
@@ -54,6 +57,19 @@ func main() {
 	if err != nil {
 		log.Fatalf("could not subscribe to change game state: %v\n", err)	
 	}
+
+	err = pubsub.SubscribeJSON(
+		connection,
+		routing.ExchangePerilTopic,
+		"war",
+		"war.*",
+		pubsub.Durable,
+		handlerWar(gameState, ch),
+	)
+	if err != nil {
+		log.Fatalf("could not subscribe to war handler: %v\n", err)	
+	}
+
 
 	OuterLoop:
 	for {
@@ -96,22 +112,3 @@ func main() {
 	fmt.Println("gracefully shutting down")
 }
 
-func handlerPause(gs *gamelogic.GameState) func(routing.PlayingState) pubsub.Acktype {
-	return func(ps routing.PlayingState) pubsub.Acktype {
-		defer fmt.Print("> ")
-		gs.HandlePause(ps)
-		return pubsub.Ack
-	}
-}
-
-func handlerMove(gs *gamelogic.GameState) func(gamelogic.ArmyMove) pubsub.Acktype {
-	return func(move gamelogic.ArmyMove) pubsub.Acktype {
-		defer fmt.Print("> ")
-		outcome := gs.HandleMove(move)
-		if outcome == gamelogic.MoveOutComeSafe || outcome == gamelogic.MoveOutcomeMakeWar {
-			return pubsub.Ack
-		}
-
-		return pubsub.NackDiscard
-	}
-}
