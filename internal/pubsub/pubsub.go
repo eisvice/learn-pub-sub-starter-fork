@@ -1,7 +1,9 @@
 package pubsub
 
 import (
+	"bytes"
 	"context"
+	"encoding/gob"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -128,6 +130,46 @@ func SubscribeJSON[T any](
 			}
 		}
 	}()
+
+	return nil
+}
+
+func PublishGob[T any](ch *amqp.Channel, exchange, key string, val T) error {
+	var buf bytes.Buffer
+	enc := gob.NewEncoder(&buf)
+	err := enc.Encode(val)
+	if err != nil {
+		return fmt.Errorf("error while encoding value to gob")
+	}
+
+	err = ch.PublishWithContext(
+		context.Background(),
+		exchange,
+		key,
+		false,
+		false,
+		amqp.Publishing{
+			ContentType: "application/gob",
+			Body: buf.Bytes(),
+		},
+	)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func PublishGameLog(ch *amqp.Channel, gl routing.GameLog) error {
+	err := PublishGob(
+		ch,
+		routing.ExchangePerilTopic,
+		routing.GameLogSlug + "." + gl.Username,
+		gl,
+	)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
