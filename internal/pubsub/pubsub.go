@@ -173,3 +173,50 @@ func PublishGameLog(ch *amqp.Channel, gl routing.GameLog) error {
 
 	return nil
 }
+
+func SubscribeGob[T any](
+    conn *amqp.Connection,
+    exchange,
+    queueName,
+    key string,
+    queueType SimpleQueueType, // an enum to represent "durable" or "transient"
+    handler func(T) Acktype,
+) error {
+	ch, _, err := DeclareAndBind(conn, exchange, queueName, key, queueType)
+	if err != nil {
+		return fmt.Errorf("can't bind the queue %v to the exchange %v: %v\n", queueName, exchange, err)
+	}
+
+	ampqChan, err := ch.Consume(queueName, "", false, false, false, false, nil)
+	if err != nil {
+		return fmt.Errorf("error while consuming the message: %v\n", err)
+	}
+
+	var result T
+	go func() {
+		for msg := range ampqChan {
+			var gl routing.GameLog
+			buf := bytes.NewBuffer(msg.Body)
+			dec := gob.NewDecoder(buf)
+			err = dec.Decode(&gl)
+			if err != nil {
+				fmt.Printf("could not decode the gob message: %v\n", err)
+			}
+	
+			ackType := handler(result)
+			switch ackType {
+			case Ack:
+				err = msg.Ack(false)
+			case NackReque:
+				err = msg.Nack(false, true)
+			case NackDiscard:
+				err = msg.Nack(false, false)
+			}
+			if err != nil {
+				log.Fatalf("errors during acknowledgement %v: %v\n", ackType, err)
+			}
+		}
+	}()
+
+	return nil
+}

@@ -28,17 +28,17 @@ func main() {
 		log.Fatalf("error while creating a channel: %v\n", err)
 	}
 
-	_, queue, err := pubsub.DeclareAndBind(
+	err = pubsub.SubscribeGob(
 		connection,
 		routing.ExchangePerilTopic,
 		routing.GameLogSlug,
 		routing.GameLogSlug + ".*",
 		pubsub.Durable,
+		handlerWriteLog(),
 	)
 	if err != nil {
-		log.Fatalf("could not subscribe to pause: %v", err)	
+		log.Fatalf("could not subscribe to game log: %v", err)	
 	}
-	fmt.Printf("Queue %v declared and bound!\n", queue.Name)
 
 	gamelogic.PrintServerHelp()
 
@@ -86,4 +86,16 @@ func main() {
 	signal.Notify(signalChan, os.Interrupt)
 	<-signalChan
 	fmt.Println("gracefully shutting down")
+}
+
+func handlerWriteLog() func(routing.GameLog) pubsub.Acktype {
+	return func(gl routing.GameLog) pubsub.Acktype {
+		defer fmt.Print("> ")
+		err := gamelogic.WriteLog(gl)	
+		if err != nil {
+			fmt.Printf("error while writing a log to disk in handlerWriteLog: %v\n", err)
+			return pubsub.NackDiscard
+		}
+		return pubsub.Ack
+	}
 }
